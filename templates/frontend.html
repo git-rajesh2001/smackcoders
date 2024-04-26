@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Resumesmack</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.2.3/css/bootstrap.min.css">
+</head>
+<body>
+<div class="container">
+    <form method="POST" enctype="multipart/form-data">
+        <div class="mb-3">
+            <label for="resume" class="form-label">Choose a resume file</label><br>
+            <input type="file" class="form-control" id="resume" name="resume">
+            <span style="color:red;font-weight: bold;">*</span>Please upload resume only in <b>.pdf</b> format<br>
+        </div>
+        <button type="submit" class="btn btn-primary" id="submitBtn" disabled>Submit</button>
+    </form><br>
+    <input type="text" id="searchInput" class="form-control" placeholder="Search to filter resumes"><br>
+    <form id="deleteAllForm" method="POST" action="{{ url_for('delete_all') }}">
+    <button type="button" class="btn btn-danger" id="deleteAllBtn">Delete All</button>
+    <button type="button" class="btn btn-danger" id="deleteFilteredBtn">Delete Filtered Data</button><br>
+    <h4>Uploaded resumes</h4>
+    <p id="data-count">Number of uploaded data: {{ data_from_mysql|length }}</p>
+    <select id="columnSelector" class="form-select" multiple>
+        <option value="1">Name</option>
+        <option value="2">Email</option>
+        <option value="3">Skills</option>
+        <option value="4">Designation</option>
+        <option value="5">Education</option>
+        <option value="6">Phone</option>
+    </select>    
+</div>
+<div class="container my-5">
+    <table class="table">
+        <thead>
+        <tr>
+            <th>#</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Skills</th>
+            <th>Designation</th>
+            <th>Education</th>
+            <th>Phone</th>
+            <th></th>
+        </tr>
+        </thead>
+        <tbody id="tableBody">
+        {% for data in data_from_mysql %}
+        <tr class="resume-row">
+            <td>{{ loop.index }}</td>
+            <td>{{ data.name }}</td>
+            <td><a href="https://mail.google.com/mail/?view=cm&fs=1&to={{ data.email }}" target="_blank">{{ data.email }}</a></td>
+            <td>{{ data.skills }}</td>
+            <td>{{ data.designation }}</td>
+            <td>{{ data.education }}</td>
+            <td>{{ data.phone }}</td>
+            <td>
+              <form method="POST" action="{{ url_for('delete', id=data.id) }}">
+                <input type="hidden" name="_method" value="DELETE">
+                <button type="submit" class="btn btn-danger delete-button" data-id="{{ data.id }}">Delete</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+    const resumeInput = document.getElementById('resume');
+    const submitBtn = document.getElementById('submitBtn');
+    const uploadForm = document.getElementById('uploadForm');
+    const tableBody = document.getElementById('tableBody');
+    const resumeCountElement = document.getElementById('data-count');
+    const deleteAllForm = document.getElementById('deleteAllForm');
+    const deleteFilteredBtn = document.getElementById('deleteFilteredBtn');
+    const deleteAllBtn = document.getElementById('deleteAllBtn');
+    const searchInput = document.getElementById('searchInput');
+    const rows = Array.from(tableBody.querySelectorAll('.resume-row')).reverse();
+    const columnSelector = document.getElementById('columnSelector');
+    
+    deleteFilteredBtn.style.display = 'none'; 
+    
+    submitBtn.disabled = true;
+    deleteFilteredBtn.disabled = true; 
+    
+    resumeInput.addEventListener('change', validateUploadedEmail);
+    resumeInput.addEventListener('input', enableSubmitBtn);
+    searchInput.addEventListener('input', filterRows);
+    deleteFilteredBtn.addEventListener('click', deleteFilteredData);
+    deleteAllBtn.addEventListener('click', deleteAllData);
+    searchInput.addEventListener('input', toggleDeleteButton);
+    columnSelector.addEventListener('change', filterRows);
+
+    function toggleDeleteButton() {
+    const searchTerm = searchInput.value.trim();
+
+    if (searchTerm !== '') {
+        deleteFilteredBtn.style.display = 'block';
+        deleteAllBtn.style.display = 'none'; // Hide deleteAllBtn when there's an active search
+    } else {
+        deleteFilteredBtn.style.display = 'none';
+        deleteAllBtn.style.display = 'block'; // Show deleteAllBtn when there's no active search
+    }
+}
+
+
+    function validateUploadedEmail()
+    {
+        const uploadedEmail = resumeInput.files[0].name;
+        const existingEmails = Array.from(document.querySelectorAll('td:nth-child(3) a')).map(a => a.textContent);
+    
+        if (existingEmails.includes(uploadedEmail))
+        {
+            resumeInput.value = '';
+            submitBtn.disabled = true;
+        }
+        else
+        {
+            submitBtn.disabled = false;
+        }
+    }
+    
+    resumeInput.addEventListener('change', function() {
+        uploadForm.submit();
+    });
+
+    function enableSubmitBtn()
+    {
+        submitBtn.disabled = false;
+    }
+    
+    function filterRows()
+    {
+        const searchTerm = searchInput.value.toLowerCase();
+        const rows = tableBody.querySelectorAll('tr');
+        let filteredCount = 0;
+    
+        rows.forEach(row =>
+        {
+            const rowData = Array.from(row.querySelectorAll('td')).map(td => td.textContent.toLowerCase());
+    
+            if (rowData.some(data => data.includes(searchTerm)))
+            {
+                row.style.display = '';
+                filteredCount++;
+            }
+            else
+            {
+                row.style.display = 'none';
+            }
+        });
+    
+        updateResumeCount(filteredCount);
+        deleteAllBtn.disabled = searchTerm !== '';
+    
+        deleteFilteredBtn.disabled = searchTerm === ''; // Enable the deleteFilteredBtn only when there's a search term
+    
+        deleteFilteredBtn.style.display = searchTerm !== '' && filteredCount > 0 ? 'block' : 'none';
+        deleteAllBtn.style.display = searchTerm === '' ? 'block' : 'none'; // Show Delete All button when there's no search term
+    }
+    
+    function deleteFilteredData() 
+    {
+        const filteredRows = Array.from(tableBody.querySelectorAll('tr')).filter(row => row.style.display !== 'none');
+        const filteredIds = filteredRows.map(row => row.querySelector('.delete-button').getAttribute('data-id'));
+    
+        if (confirm(`Are you sure you want to delete ${filteredRows.length} filtered data?`)) {
+            filteredIds.forEach(id =>
+            {
+                const deleteForm = document.createElement('form');
+                deleteForm.method = 'POST';
+                deleteForm.action = `/delete/${id}`;
+                const methodInput = document.createElement('input');
+                methodInput.type = 'hidden';
+                methodInput.name = '_method';
+                methodInput.value = 'DELETE';
+                deleteForm.appendChild(methodInput);
+                document.body.appendChild(deleteForm);
+                deleteForm.submit();
+            });
+        }
+    }
+    
+    function updateResumeCount(count)
+    {
+        resumeCountElement.textContent = `Number of uploaded data: ${count}`;
+    }
+    
+    function deleteAllData() {
+        if (confirm('Are you sure you want to delete all data?'))
+        {
+            deleteAllForm.submit();
+        }
+    }
+    
+    tableBody.innerHTML = '';
+    rows.forEach(row =>
+    {
+        tableBody.appendChild(row);
+    });
+    updateResumeCount(tableBody.querySelectorAll('tr').length);
+</script>
+
+    
+</body>
+</html>
